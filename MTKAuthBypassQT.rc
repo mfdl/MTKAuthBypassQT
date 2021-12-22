@@ -1,0 +1,4 @@
+#include <windows.h>
+
+IDI_ICON ICON DISCARDABLE "MTKAuthBypassQT.ico"
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "MTKAuthBypassQT.exe.manifest"
