@@ -36,7 +36,7 @@ UI_DIR = $$DESTDIR/.u
 
 DESTDIR = output
 
-win32:RC_FILE += mtksecbypass.rc
+win32:RC_FILE += MTKAuthBypassQT.rc
 win32 {
 CONFIG += embed_manifest_exe
 
@@ -71,8 +71,6 @@ HEADERS += \
     gui/mainui.h \
     gui/myhelper.h \
     gui/titlebar.h \
-    libusb/libusb1.h \
-    libusb/mfdproc.h \
     mthread/m_callback.h \
     mthread/m_cmd.h \
     mthread/m_controller.h \
@@ -86,7 +84,6 @@ HEADERS += \
 SOURCES += \
     brom/boot_rom.cpp \
     brom/com_io.cpp \
-    brom/expolitv2.cpp \
     brom/meta_mode.cpp \
     brom/vivo_demo.cpp \
     brom/bootrom_old.cpp \

@@ -11,7 +11,8 @@
 #include <QTimer>
 #include <QTextStream>
 #include <iostream>
-#include"gui/app.h"
+#include "gui/app.h"
+#include <QTextStream>
 
 QFile *logFileDef = new QFile;
 QString logFileName;
@@ -98,7 +99,7 @@ void LogHandlerPrivate::openAndBackupLogFile() {
         logFile = new QFile(logPath);
         logOut  = (logFile->open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Append)) ?  new QTextStream(logFile) : NULL;
         if (NULL != logOut) {
-            logOut->setCodec("UTF-8");
+            //logOut->setCodec("UTF-8");
         }
         // [[2]] 如果文件是第一次创建，则创建日期是无效的，把其设置为当前日期
         if (logFileCreatedDate.isNull()) {
@@ -119,7 +120,7 @@ void LogHandlerPrivate::openAndBackupLogFile() {
         logOut  = (logFile->open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) ?  new QTextStream(logFile) : NULL;
         logFileCreatedDate = QDate::currentDate();
         if (NULL != logOut) {
-            logOut->setCodec("UTF-8");
+            //logOut->setCodec("UTF-8");
         }
     }
 }

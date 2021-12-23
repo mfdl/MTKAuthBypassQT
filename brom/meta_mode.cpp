@@ -1,8 +1,8 @@
 #include "boot_rom.h"
-#include "ui_mainwindow.h"
 #include "boot_rom_cmd.h"
 #include "usb_defs.h"
-#include <QtSerialPort/QSerialPortInfo>
+#include "m_callback.h"
+#include <QSerialPortInfo>
 
 qvoid boot_rom::reboot_meta_mode()
 {
@@ -54,7 +54,7 @@ qvoid boot_rom::reboot_meta_mode()
     if(!brom_start_cmd())
         return;
 
-    send_log_normal("Send PARA v3 mode...\n");
+    send_log_normal("Send PARA_v1 regs...\n");
 
     if(!brom_write8_echo(0xDA))
         return;
@@ -69,8 +69,6 @@ qvoid boot_rom::reboot_meta_mode()
     if(!this->write8(1))
         return;
     read16(&ack);
-
-    send_log_normal("Send PARA_v2 regs...\n");
 
     if(!brom_write8_echo(0xDA))
         return;

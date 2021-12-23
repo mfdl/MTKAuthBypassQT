@@ -8,7 +8,6 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <crtdefs.h>
-#include "libusb/mlibusb.h"
 #include "usbdevfinder.h"
 
 #define ME_ID_BUFFER_LEN 16
@@ -35,12 +34,7 @@ public:
     bool connect_mtk_device();
 
     bool brom_set_sec_cfg(quint16 hw_code, bool secure, bool dump_pl);
-    bool prepare_payload(Config config, QByteArray &payload);
 private:
-    bool Read32(QByteArray &data, quint32 addr, int size);
-    bool Write32(quint32 addr, QList<quint32> list, bool needcheck = true);
-
-    bool send_da(QByteArray da, quint32 da_len, quint32 addr, quint32 sig_len);
     bool SendDA(quint32 addr, quint32 da_len, quint32 sig_len, QByteArray da, quint16 &checksum);
     bool JumpDa(quint32 addr);
 
@@ -93,7 +87,7 @@ private:
     int write32(quint32 data, bool type = 0);
     int write_buffer(quint8* data, quint32 length);
     int read_buffer(quint8* data, quint32 length);
-    //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+
     int write_ptr(char *data, quint32 length);
     int read_ptr(char *data, quint32 length);
     int write_pattern(QByteArray buff);

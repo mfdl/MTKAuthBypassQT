@@ -141,7 +141,7 @@ void mWorker::run()
     }
     catch(const QString &str_exp)
     {
-        send_log_fail(QString("\n%0").arg(str_exp));
+        send_log_red(QString("\n%0").arg(str_exp));
 
         isOK = false;
     }

@@ -4,6 +4,7 @@
 
 #include "ui_mainui.h"
 #include "mainui.h"
+#include <QRegularExpression>
 
 using namespace USBCore;
 

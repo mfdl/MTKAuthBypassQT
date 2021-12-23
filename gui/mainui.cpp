@@ -7,7 +7,7 @@
 #include <QDebug>
 #include <QFileDialog>
 #include <cassert>
-#include <QDesktopWidget>
+#include <QDesktopServices>
 #include <QStatusBar>
 #include <QScreen>
 #include <QClipboard>

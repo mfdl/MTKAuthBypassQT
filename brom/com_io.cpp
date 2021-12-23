@@ -1,4 +1,5 @@
 #include "boot_rom.h"
+#include "m_callback.h"
 
 using namespace std;
 
@@ -50,7 +51,7 @@ bool boot_rom::connect_brom(int port_num)
     if (_hcom == INVALID_HANDLE_VALUE)
     {
         send_log_fail("open com fail! please restart the program.");
-        return false;
+        return 0;
     }
 
     DWORD com_error = 0;
@@ -155,10 +156,9 @@ size_t boot_rom::brom_get(quint8* data, size_t length, quint32 timeout)
                 }
                 else if(result == WAIT_OBJECT_0 + 1)
                 {
-                    qInfo() << "Rx abort.";
                     ::CancelIo(_hcom);
                     disconnect_brom();
-                    throw "boost::thread_interrupted()";
+                    throw "err::thread_interrupted()";
                     break;
                 }
                 else if(result == WAIT_TIMEOUT)
@@ -166,14 +166,12 @@ size_t boot_rom::brom_get(quint8* data, size_t length, quint32 timeout)
                     ::CancelIo(_hcom);
                    // disconnect_brom();
                     qInfo() << QString("Rx timeout in %0").arg(timeout);
-                   // throw QString("Rx timeout in %0").arg(timeout);
                     break;
                 }
                 else
                 {
                     quint32 last_err = GetLastError();
                     disconnect_brom();
-                    qInfo() << QString("Rx WaitForMultipleObjects error: %0").arg(last_err);
                     throw QString("Rx WaitForMultipleObjects error: %0").arg(last_err);
                     break;
                 }
@@ -182,7 +180,6 @@ size_t boot_rom::brom_get(quint8* data, size_t length, quint32 timeout)
             {
                 quint32 last_err = GetLastError();
                 disconnect_brom();
-                qInfo() << QString("Rx ReadFile error. code: %0").arg(last_err);
                 throw QString("Rx ReadFile error. code: %0").arg(last_err);
                 break;
             }
@@ -195,7 +192,6 @@ size_t boot_rom::brom_get(quint8* data, size_t length, quint32 timeout)
                 ::ClearCommError(_hcom, &com_error, NULL);
                 disconnect_brom();
                 throw QString("Rx Clear COM error");
-                qInfo() << "Rx Clear COM error" ;
             }
             xferd_read += r_ov.InternalHigh;
         }
@@ -203,13 +199,7 @@ size_t boot_rom::brom_get(quint8* data, size_t length, quint32 timeout)
     if (xferd_read != length)
     {
         qInfo() << QString("Rx xferd length[%0] != expected length[%1]").arg(xferd_read).arg(length);
-        //disconnect_brom();
-        //throw QString("Rx xferd length[%0] != expected length[%1]").arg(xferd_read).arg(length);
-        //BOOSTHROW_EXCEPTION(runtime_exception(string("Rx data incomplete.")));
     }
-
-//    qbyte buff = QByteArray::fromRawData((char*)data, length);
-//    qInfo() << "boot_rom::read:" << buff.toHex() << buff.size();
 
     return xferd_read;
 }
@@ -239,10 +229,9 @@ size_t boot_rom::brom_send(quint8* data, size_t length, quint32 timeout)
                 }
                 else if(result == WAIT_OBJECT_0 + 1)
                 {
-                    qInfo() << "Tx abort.";
                     ::CancelIo(_hcom);
                     disconnect_brom();
-                    throw "boost::thread_interrupted()";
+                    throw "err::thread_interrupted()";
                     break;
                 }
                 else if(result == WAIT_TIMEOUT)
@@ -250,14 +239,12 @@ size_t boot_rom::brom_send(quint8* data, size_t length, quint32 timeout)
                     ::CancelIo(_hcom);
                     //disconnect_brom();
                     qInfo() << QString("Tx timeout in %0").arg(timeout);
-                    //throw QString("Tx timeout in %0").arg(timeout);
                     break;
                 }
                 else
                 {
                     quint32 last_err = GetLastError();
                     disconnect_brom();
-                    qInfo() << QString("Tx WaitForMultipleObjects error: %0").arg(last_err);
                     throw QString("Tx WaitForMultipleObjects error: %0").arg(last_err);
                     break;
                 }
@@ -266,7 +253,6 @@ size_t boot_rom::brom_send(quint8* data, size_t length, quint32 timeout)
             {
                 quint32 last_err = GetLastError();
                 disconnect_brom();
-                qInfo() << QString("Tx WriteFile error. code: %0").arg(last_err);
                 throw QString("Tx WriteFile error. code: %0").arg(last_err);
                 break;
             }
@@ -281,13 +267,7 @@ size_t boot_rom::brom_send(quint8* data, size_t length, quint32 timeout)
     if (xferd_write != length)
     {
         qInfo() << QString("Tx xferd_write length[%0] != expected length[%1]").arg(xferd_write).arg(length);
-        //disconnect_brom();
-        //throw QString("Tx xferd_write length[%0] != expected length[%1]").arg(xferd_write).arg(length);
-        //BOOSTHROW_EXCEPTION(runtime_exception(string("Tx data incomplete.")));
     }
-
-//    qbyte buff = QByteArray::fromRawData((char*)data, length);
-//    qInfo() << "boot_rom::read:" << buff.toHex() << buff.size();
 
     return xferd_write;
 }
@@ -344,7 +324,6 @@ int boot_rom::write_buffer(quint8* data, quint32 length)
 {
     return brom_send(data, length, timeout);
 }
-///********************************mrx_edit***********************************//
 int boot_rom::write_ptr(char *data, quint32 length)
 {
     return brom_send((quint8*)data, length, timeout);
@@ -357,7 +336,6 @@ int boot_rom::bootrom_sv5_read_ptr(QByteArray data, quint32 length)
 {
     return brom_get((quint8*)data.data(), length, timeout);
 }
-///********************************mrx_edit***********************************//
 int boot_rom::write_pattern(QByteArray buff)
 {
     return brom_send((quint8*)buff.data(), buff.length(), timeout);
@@ -368,77 +346,3 @@ int boot_rom::read_pattern(QByteArray &buff, quint32 length)
     int len = brom_get((quint8*)buff.data(), length, timeout);
     return len;
 }
-
-//unsigned int boot_rom::ReadPattern(PATTERN_INFO_S * pPattern, const unsigned int kPatternNum)
-//{
-//	DWORD  dwReadLen;
-//	char szRevBuf[MAX_REVBUF_SIZE];
-//	char szFlowPool[MAX_PATTERN_LEN];
-//	unsigned int uPoolSize;
-
-//	//Check parameters
-//	if( (NULL == pPattern) ||(1 > kPatternNum))
-//	{
-//		printf("Incorrect parameters!(NULL pointer or wrong pattern number)\n");
-//		return S_INVALID_ARGUMENTS;
-//	}
-
-//	uPoolSize = MAX_PATTERN_LEN;
-
-//	memset(szRevBuf, 0, MAX_REVBUF_SIZE);
-//	memset(szFlowPool, 0, MAX_PATTERN_LEN);
-
-
-//	try
-//	{
-//		for(unsigned int i = 0; i < m_uRetryTime; i++)
-//		{
-//			//if(BOOT_STOP == *m_pStopFlag)
-//			//{
-//			//    printf("PreloaderCmd::ReadPattern(): STOP!");
-//			//    return S_STOP;
-//			//}
-
-
-//			memset(szRevBuf, 0, MAX_REVBUF_SIZE);
-//			dwReadLen = 0;
-//			if(brom_get(szRevBuf, &dwReadLen))
-//			{
-//				printf("ReadComm Read fail!\n");
-//				return S_PL_READ_FAIL;
-//			}
-//			else if(0 != dwReadLen)
-//			{
-//				//printf("PreloaderCmd::ReadPattern(): Dump data: ===%s===\n", szRevBuf);
-//				//printf("PreloaderCmd::ReadPattern(): Dump data size: %u\n", dwReadLen);
-
-//				for(unsigned int k = 0; k < dwReadLen; k++)
-//				{
-//					memcpy(szFlowPool, szFlowPool+1, uPoolSize-1);
-//					memcpy(szFlowPool+uPoolSize-1, szRevBuf+k, 1);
-
-//					for(unsigned int s = 0; s < kPatternNum; s++ )
-//					{
-//						if(0 == memcmp(szFlowPool + (uPoolSize - pPattern[s].m_uLen), pPattern[s].m_szPattern, pPattern[s].m_uLen))
-//						{
-//							//printf("Pattern matched: %s\n", pPattern[s].m_szPattern);
-//							return pPattern[s].m_uStatus;
-//						}
-//					}
-//				}
-//			}
-
-//			Sleep(m_quinterval);
-//		}
-
-//		printf("Read timeout! Retry time(%u)\n", m_uRetryTime);
-//		return S_PL_READIMEOUT;
-//	}
-//	catch(...)
-//	{
-
-//		printf( "Unknown exception! Err(%u)\n", GetLastError());
-
-//		return S_UNDEFINED_ERROR;
-//	}
-//}

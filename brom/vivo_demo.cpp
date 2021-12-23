@@ -1,8 +1,9 @@
 #include "boot_rom.h"
-#include "ui_mainwindow.h"
 #include "boot_rom_cmd.h"
 #include "usb_defs.h"
-#include <QtSerialPort/QSerialPortInfo>
+#include "m_callback.h"
+
+#include <QSerialPortInfo>
 
 quint8 boot_rom::FindPorts(QString &pinfo)
 {
@@ -111,7 +112,6 @@ vd boot_rom::vivo_remove_demo()
         return;
 
     write_pattern(QByteArray::fromHex("6200000000005C000000"));
-    // BRom_DAResetWDT();
     write_pattern(QByteArray::fromHex("8012000000005C0000003B7D95000080318065B0831148C883009000"));
 
     disconnect_brom();

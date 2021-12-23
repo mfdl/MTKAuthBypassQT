@@ -1,6 +1,7 @@
 #include "titlebar.h"
 #include <QHBoxLayout>
 #include <QApplication>
+#include <QPalette>
 
 TitleBar::TitleBar(QWidget *parent) :
     QFrame(parent)

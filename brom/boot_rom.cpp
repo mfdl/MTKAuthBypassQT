@@ -1,7 +1,147 @@
 #include "boot_rom.h"
-#include "ui_mainwindow.h"
 #include "boot_rom_cmd.h"
 #include "usb_defs.h"
+#include "m_callback.h"
+#include "mainui.h"
+
+qbyte boot_rom::GetBytesFromInt(qsizetype input)
+{
+    QVector<qsizetype> bytes = {};
+    bytes.push_back(input);
+    qbyte res = {};
+    res.append((char*)bytes.data(), bytes.size()*sizeof(input));
+    return res;
+}
+
+quint32 boot_rom::GetIntFromBytes(qbyte input)
+{
+    QVector<quint32> res = {};
+    for (int i = 0; i < input.size()/sizeof(quint32); ++i)
+        res.push_back(*(quint32*)(input.data()+i*sizeof(quint32)));
+
+    return *res.data();
+}
+qbool boot_rom::BRomUpdateLineCoding(quint addr)
+{
+    struct line_coding_struct
+    {
+        quint baudrate{0};
+        qchar stop_bits{0};
+        qchar m_parity{0};
+        qchar data_bits{0};
+    };
+
+    qbyte get_linecode = {0x7, Qt::Uninitialized};
+    if (!UsbSendDevCtrl(0xa1, 0x21, 0x00, 0x00, get_linecode))
+        return 0;
+
+    qbyte set_linecode = {};
+    set_linecode.append(get_linecode);
+    set_linecode.append(mCallback::GetNum(0x00));
+    set_linecode.append(mCallback::GetLe32(addr));
+    set_linecode.append(mCallback::GetNum(0x00));
+
+    if (!UsbSendDevCtrl(0x21, 0x20, 0x00, 0x00, set_linecode))
+        return 0;
+
+    qbyte reset = {0x7, Qt::Uninitialized};
+    if (!UsbSendDevCtrl(0x80, 0x06, 0x0200, 0x00, reset))
+        return 0;
+
+    return 1;
+}
+
+qbool boot_rom::BRomDaRead(Config &info, quint addr, quint len, qbyte &data, qbool check)
+{
+    return BRomDaReadWrite(info, addr, len, data, check);
+}
+
+qbool boot_rom::BRomDaWrite(Config &info, quint addr, quint len, qbyte &data, qbool check)
+{
+    return BRomDaReadWrite(info, addr, len, data, check);
+}
+
+qbool boot_rom::BRomRegAccess(Config &info, quint addr, quint len, qbyte &data, qbool check)
+{
+    qint write = data.size()?1:0;
+
+    if(!brom_write8_echo(0xDA))
+        return 0;
+    if(!write32(write, 1))
+        return 0;
+    if(!write32(addr, 1))
+        return 0;
+    if(!write32(len, 1))
+        return 0;
+    quint16 ack = {};
+    read16(&ack);
+    if(ack != 0x00)
+        return 0;
+
+    if(write)
+    {
+        if(!this->write_pattern(data))
+            return 0;
+    }
+    else
+    {
+        if(!this->read_pattern(data, len))
+            return 0;
+    }
+
+    if(check)
+    {
+        quint16 ack = {};
+        read16(&ack);
+        if(ack != 0x00)
+            return 0;
+    }
+
+    return 1;
+}
+
+qbool boot_rom::BRomDaReadWrite(Config &info, quint addr, quint len, qbyte &data, qbool check)
+{
+    qbyte null = {};
+    if(!BRomRegAccess(info, 0x00, 0x1, null))
+        return 0;
+
+    if(!BRom_ReadCmd32(info.wdg_addr + 0x50, 0x1, 0x1, 0x4))
+        return 0;
+
+    for (int i = 0; i < 3; i++)
+    {
+        if(!BRomUpdateLineCoding(info.ptr_da + 8 - 3 + i))
+            return 0;
+    }
+
+    if(addr < 0x40)
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            if(!BRomUpdateLineCoding(info.ptr_da - 6 + (4 - i)))
+                return 0;
+        }
+
+        if(!BRomRegAccess(info, addr, len, data, check))
+            return 0;
+
+        return 1;
+    }
+    else
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            if(!BRomUpdateLineCoding(info.ptr_da - 5 + (3 - i)))
+                return 0;
+        }
+
+        if(!BRomRegAccess(info, addr - 0x40, len, data, check))
+            return 0;
+
+        return 1;
+    }
+}
 
 qbool boot_rom::UsbSendDevCtrl(qchar req_type, qchar req, qshort val, qshort idx, qbyte &buff)
 {
@@ -109,7 +249,6 @@ qbool boot_rom::UsbSendDevCtrl(qchar req_type, qchar req, qshort val, qshort idx
     usb_find_devices();
 
     WinUSB::usb_dev_handle *hnd = Q_NULLPTR;
-
     for (WinUSB::usb_bus* bus = usb_get_busses(); bus; bus = bus->next)
     {
         for (WinUSB::usb_device* dev = bus->devices; dev; dev = dev->next)
@@ -156,14 +295,122 @@ qbool boot_rom::UsbSendDevCtrl(qchar req_type, qchar req, qshort val, qshort idx
     return (usb_close(hnd) == 0);
 }
 
+qbool boot_rom::mtk_new_expolit(Config &info, qbool dump_emi)
+{
+    if(dump_emi)
+        send_log_normal("Dumping preloader from memory...\n");
+    else
+        send_log_normal("Disable BRom protection...\n");
+
+    qbyte ptr_read = {};
+    if(!BRomDaRead(info, info.ptr_usbdl, 0x4, ptr_read))
+        return 0;
+
+    qInfo().noquote().nospace() << QString("boot_rom::ptr_send(%0)").arg(ptr_read.toHex().data());
+
+    if(!BRomDaReadWrite(info, info.pl_addr, info.payload.size(), info.payload))
+        return 0;
+
+    qbyte pl_add = GetBytesFromInt(info.pl_addr);
+    quint ptr_send = GetIntFromBytes(ptr_read) + 8;
+    qInfo().noquote().nospace() << QString("boot_rom::pl_add(%0)").arg(pl_add.toHex().data());
+    qInfo().noquote().nospace() << QString("boot_rom::ptr_send(%0)").arg(mCallback::GetU32(ptr_send));
+
+    if(!BRomDaReadWrite(info, ptr_send, 4, pl_add, 0))
+        return 0;
+
+    qInfo().noquote().nospace() << QString("boot_rom::send paylaod ok");
+    quint ack = {};
+    if(!read32(&ack))
+        return 0;
+
+    if(!dump_emi)
+    {
+        if(ack != 0xa1a2a3a4)
+        {
+            send_log_fail(qstr("Bypass Payload ACK err:(0x%1)").arg(mCallback::GetU32(ack)));
+            return 0;
+        }
+        else
+        {}
+    }
+    else
+    {
+        if(ack != 0xc1c2c3c4)
+        {
+            send_log_fail(qstr("Dump Payload ACK err:(0x%1)").arg(mCallback::GetU32(ack)));
+            return 0;
+        }
+        else
+        {
+            quint emilen = 0;
+            if(!read32(&emilen))
+                return 0;
+
+            qint prg_val = 0x00;
+            quint blk_sz = 0x1000;
+            quint maxlen = qFromBigEndian(emilen);
+            qint max_prg = maxlen/blk_sz;
+
+            qbyte prl_buff = {};
+            while (max_prg != -1)
+            {
+                qint rlen = ((max_prg)?blk_sz : (maxlen - prg_val));
+                qbyte sec = {};
+                qInfo() << "read_prl " << rlen << prl_buff.size();
+                if(!read_pattern(sec, rlen))
+                    return 0;
+
+                prl_buff.append(sec);
+
+                prg_val += blk_sz;
+                max_prg--;
+            }
+
+            qbyte search("MTK_BLOADER_INFO");
+            qsizetype idx = prl_buff.indexOf(search);
+            if (idx != -1)
+            {
+                qstr emi_name = prl_buff.mid(idx + 0x1b, 0x30);
+                qstr rndm = qstr("%0").arg(QDateTime::currentDateTime().toString("yyyy_MM_dd hh_mm_ss")).replace(" ","_").toUtf8();
+
+                qInfo() << "eminame " <<  prl_buff.mid(idx + 0x1b, 0x30);
+                qstr path = APP_PATH + "/" + rndm + "_" + emi_name;
+                mCallback::WriteFile(path, prl_buff);
+
+                send_log_normal("Preloader file saved to \n");
+                send_log_info(path);
+
+                send_log_normal(qstr("Bloader Info Version = (%0)").arg(prl_buff.mid(idx, 0x1b).data()));
+                QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(path).absolutePath()));
+            }
+            else
+            {
+                //send_log_fail("failed to dump preloader");
+                qstr rndm = qstr("%0").arg(QDateTime::currentDateTime().toString("yyyy_MM_dd hh_mm_ss")).replace(" ","_").toUtf8();
+                qstr path = APP_PATH + "/" + rndm + "_preloader.bin";
+                mCallback::WriteFile(path, prl_buff);
+
+                send_log_normal("Preloader file saved to \n");
+                send_log_info(path);
+
+                send_log_normal(qstr("Bloader Info Version = (%0)").arg(prl_buff.mid(idx, 0x1b).data()));
+                QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(path).absolutePath()));
+            }
+        }
+    }
+
+    return (ack == 0xa1a2a3a4 || ack == 0xc1c2c3c4);
+}
+
 quint8 boot_rom::GetNum(quint8 val)
 {
     return val;
 }
 
-QByteArray boot_rom::GetLow16(quint16 value)
+qbyte boot_rom::GetLow16(quint16 value)
 {
-    QByteArray res = {};
+    qbyte res = {};
     QDataStream stream(&res, QIODevice::ReadWrite);
     stream.setByteOrder(QDataStream::LittleEndian);
     stream << quint16(value);
@@ -220,7 +467,7 @@ bool boot_rom::BRom_ReadCmd32(quint32 addr, quint32 val, quint8 read, quint32 le
     {
         if (!readack(0x00, 1))
             return 0;
-        QByteArray read = {};
+        qbyte read = {};
         if(!this->read_pattern(read, len))
             return 0;
         if (!readack(0x00, 1))
@@ -230,27 +477,27 @@ bool boot_rom::BRom_ReadCmd32(quint32 addr, quint32 val, quint8 read, quint32 le
     return 1;
 }
 
-bool boot_rom::SendDA(quint32 addr, quint32 da_len, quint32 sig_len, QByteArray da, quint16 &checksum)
+bool boot_rom::SendDA(quint32 addr, quint32 da_len, quint32 sig_len, qbyte da, quint16 &checksum)
 {
     if (!brom_write8_echo(0xd7))
-        return false;
+        return 0;
 
     if (!brom_write32_echo(addr))
-        return false;
+        return 0;
 
     if (!brom_write32_echo(da_len))
-        return false;
+        return 0;
 
     if (!brom_write32_echo(sig_len))
-        return false;
+        return 0;
 
     quint16 check;
     read16(&check);
     if(check != 0)
-        return false;
+        return 0;
 
     if (!write_ptr((char*)da.constData(), da.size()))
-        return false;
+        return 0;
 
     bool do_check = 1;
 
@@ -268,10 +515,10 @@ bool boot_rom::SendDA(quint32 addr, quint32 da_len, quint32 sig_len, QByteArray 
 quint16 boot_rom::da_read16(quint32 addr)
 {
     if (!brom_write8_echo(0xd0))
-        return false;
+        return 0;
 
     if (!brom_write32_echo(addr))
-        return false;
+        return 0;
 
     quint16 read = 0;
     read16(&read);
@@ -279,195 +526,18 @@ quint16 boot_rom::da_read16(quint32 addr)
     return read;
 }
 
-bool boot_rom::send_da(QByteArray da, quint32 da_len, quint32 addr, quint32 sig_len)
-{
-    if (!brom_write8_echo(0xd7))
-        return false;
-
-    if (!brom_write32_echo(addr))
-        return false;
-
-    if (!brom_write32_echo(da_len))
-        return false;
-
-    if (!brom_write32_echo(sig_len))
-        return false;
-
-    quint16 check;
-    read16(&check);
-    if(check != 0)
-        return false;
-
-    if (!write_ptr((char*)da.constData(), da.size()))
-    {
-        send_log_fail("\nBRom6762::xflash_boot_rom:sv5_send da fail{0xc0060003}");
-        return false;
-    }
-
-    read16(&check);
-
-    return true;
-}
-
 bool boot_rom::JumpDa(quint32 addr)
 {
     if (!brom_write8_echo(0xd5))
-        return false;
+        return 0;
 
     if (!brom_write32_echo(addr))
-        return false;
+        return 0;
 
     quint16 check;
     read16(&check);
     if(check != 0)
-        return false;
-
-    return true;
-}
-
-bool boot_rom::Write32(quint32 addr, QList<quint32> list, bool needcheck)
-{
-    if (!brom_write8_echo(0xd4))
-        return false;
-
-    if (!brom_write32_echo(addr))
-        return false;
-
-    if (!brom_write32_echo(list.count()))
-        return false;
-
-    quint16 check;
-    read16(&check);
-    if(check != 1)
-        return false;
-
-    for (int i = 0; i < list.count(); i++)
-    {
-        if (!brom_write32_echo(list.at(i)))
-            return false;
-    }
-
-    if(needcheck)
-    {
-        quint16 check;
-        read16(&check);
-        if(check != 1)
-            return false;
-    }
-
-    return true;
-}
-
-bool boot_rom::Read32(QByteArray &data, quint32 addr, int size)
-{
-    if (!brom_write8_echo(0xd1))
-        return false;
-
-    if (!brom_write32_echo(addr))
-        return false;
-
-    if (!brom_write32_echo(size))
-        return false;
-
-    quint16 check1;
-    read16(&check1);
-    if(check1 != 0)
-        return false;
-
-    for (int i = 0; i < size; i++)
-    {
-        char buff[4];
-        int len = read_ptr(buff, sizeof(buff));
-        if (len <= 0)
-            break;
-        data.append(buff, len);
-    }
-
-    quint16 check2;
-    read16(&check2);
-    if(check2 != 0)
-        return false;
-
-    return true;
-}
-
-bool boot_rom::prepare_payload(Config config, QByteArray &payload)
-{
-    payload = mCallback::ReadFile(qstr(":/res/res/%0").arg(config.payloadname));
-
-    int size = payload.size();
-    quint32 wdg_addr = 0, uart_base = 0;
-
-    int wdg_offset = size - sizeof(quint32);
-    int uart_offset = size - (sizeof(quint32) * 2);
-
-    QBuffer buffer(&payload);
-    if (!buffer.open(QBuffer::ReadWrite))
-    {
-        send_log_red(QString("%1").arg(buffer.errorString()));
-        return false;
-    }
-
-    if (!buffer.seek(wdg_offset))
-    {
-        send_log_red(QString("%1").arg(buffer.errorString()));
-        return false;
-    }
-    if (buffer.read((char*)&wdg_addr, sizeof(quint32)) != sizeof(quint32))
-    {
-        send_log_red(QString("%1").arg(buffer.errorString()));
-        return false;
-    }
-    if (wdg_addr == 0x10007000)
-    {
-        if (!buffer.seek(wdg_offset))
-        {
-            send_log_red(QString("%1").arg(buffer.errorString()));
-            return false;
-        }
-
-        if (buffer.write((char*)&config.wdg_addr, sizeof(quint32)) != sizeof(quint32))
-        {
-            send_log_red(QString("%1").arg(buffer.errorString()));
-            return false;
-        }
-    }
-
-    if (!buffer.seek(uart_offset))
-    {
-        send_log_red(QString("%1").arg(buffer.errorString()));
-        return false;
-    }
-    if (buffer.read((char*)&uart_base, sizeof(quint32)) != sizeof(quint32))
-    {
-        send_log_red(QString("%1").arg(buffer.errorString()));
-        return false;
-    }
-    if (uart_base == 0x11002000)
-    {
-        if (!buffer.seek(uart_offset))
-        {
-            send_log_red(QString("%1").arg(buffer.errorString()));
-            return false;
-        }
-
-        if (buffer.write((char*)&config.uart_base, sizeof(quint32)) != sizeof(quint32))
-        {
-            send_log_red(QString("%1").arg(buffer.errorString()));
-            return false;
-        }
-    }
-
-    buffer.close();
-
-    while (payload.size()%4)
-        payload.append("\x00");
-
-    if (payload.size() >= 0xa00)
-    {
-        send_log_red("payload data too large");
-        return false;
-    }
+        return 0;
 
     return true;
 }
@@ -501,7 +571,7 @@ bool boot_rom::brom_set_sec_cfg(quint16 hw_code, bool secure, bool dump_pl)
             info.uart_base = 0x11002000;
             info.payloadname = "mt6572_payload.bin";
 
-            info.ptr_usbdl =0x40ba68;
+            info.ptr_usbdl = 0x40ba68;
             info.ptr_da = 0x40befc;
         }
         map.insert(target, info);
@@ -793,7 +863,6 @@ bool boot_rom::brom_set_sec_cfg(quint16 hw_code, bool secure, bool dump_pl)
         }
         map.insert(target, info);
 
-        ///****************************************************************************
         target = "mt6779";
         {
             info.var0 = -1;
@@ -807,7 +876,6 @@ bool boot_rom::brom_set_sec_cfg(quint16 hw_code, bool secure, bool dump_pl)
             info.ptr_da = 0xe50c;
         }
         map.insert(target, info);
-        ///****************************************************************************
 
         target = "mt6873";
         {
@@ -980,20 +1048,15 @@ bool boot_rom::brom_set_sec_cfg(quint16 hw_code, bool secure, bool dump_pl)
     }
 
     Config config = {};
-        for (QMap<QString,Config>::iterator it = map.begin(); it != map.end(); it++)
+    for (QMap<QString,Config>::iterator it = map.begin(); it != map.end(); it++)
+    {
+        Config tmp = it.value();
+        if (tmp.hwcode == hw_code)
         {
-            Config tmp = it.value();
-            if (tmp.hwcode == hw_code)
-            {
-                soc = it.key();
-                config = tmp;
-                break;
-            }
+            config = tmp;
+            break;
         }
-
-
-    if(soc == "auto")
-        soc.append(QString("0x%0").arg(hw_code, 0, 16));
+    }
 
     if (config.hwcode == 0x950
             || config.hwcode == 0x959
@@ -1019,34 +1082,21 @@ bool boot_rom::brom_set_sec_cfg(quint16 hw_code, bool secure, bool dump_pl)
         if (config.payloadname.isEmpty())
         {
             send_log_red("not supported chipset id");
-            return false;
+            return 0;
         }
 
         send_log_normal("Disabling watchdog..\n");
 
-        if (!Write32(config.wdg_addr, (QList<quint32>() << 0x22000064)))
+        if (!BRom_WriteCmd32(config.wdg_addr, config.uart_base))
         {
             send_log_red("disable WDT error!");
-            return false;
-        }
-
-        QByteArray payload = {};
-        if (!prepare_payload(config, payload))
-        {
-            send_log_red("failed to prepare payload!");
             return 0;
         }
 
-//!Read BRom Ver & PL Ver.
-        if(!write8(0xff))
-            return 0;
-        quint8 ack0 = {}; //05
-        if(!read8(&ack0)) //ff
-            return 0;
-        if(!write8(0xfe))
-            return 0;
-        quint8 ack1 = {}; //fe
-        if(!read8(&ack1))
+        qbyte payload = {
+            mCallback::ReadFile(qstr(":/res/res/%0").arg(config.payloadname))
+        };
+        if (!payload.size())
             return 0;
 
         if (!BRom_WriteCmd32(config.wdg_addr, config.uart_base))
@@ -1066,7 +1116,7 @@ bool boot_rom::brom_set_sec_cfg(quint16 hw_code, bool secure, bool dump_pl)
                 return 0;
         }
 
-        if (!brom_write8_echo(0xe0))
+        if (!brom_write8_echo(BROM_SCMD_SEND_CERT))
             return 0;
         if (!brom_write32_echo(payload.size()))
             return 0;
@@ -1076,7 +1126,7 @@ bool boot_rom::brom_set_sec_cfg(quint16 hw_code, bool secure, bool dump_pl)
         if (!write_ptr((char*)payload.constData(), payload.size()))
         {
             send_log_red("failed to send payload");
-            return false;
+            return 0;
         }
 
         quint32 check32;
@@ -1112,7 +1162,7 @@ bool boot_rom::brom_write32_echo(quint32 cmd)
     write32(cmd);
     read32(&ack);
     if(cmd != ack)
-        return false;
+        return 0;
 
     return true;
 }
@@ -1263,11 +1313,11 @@ bool boot_rom::crash_preloader(bool prl, qbool disable_auth)
             return 0;
 
         if(!brom_start_cmd())
-            return false;
+            return 0;
 
         quint16 hcode = 0;
         if(!get_chip_info(hcode))
-            return false;
+            return 0;
     }
 
     send_log_normal("Switch preloader to bootrom...");
@@ -1336,3 +1386,129 @@ void boot_rom::set_opt(const QSharedPointer<mThreadOPT> &opt)
     opt_ = opt;
 }
 
+qbool RunProc(qstr programm, qstrl args, qbyte &output)
+{
+    output.clear();
+    QMutex mutex;
+    mutex.lock();
+    QProcess *runner = new QProcess();
+
+    if (runner && !(args).isEmpty())
+    {
+        runner->setEnvironment(QProcess::systemEnvironment());
+        runner->setProcessChannelMode(QProcess::MergedChannels);
+
+        runner->setWorkingDirectory(QFileInfo(programm).absolutePath());
+
+
+        runner->start(programm, args);
+
+        if (runner->waitForStarted())
+        {
+            if (!runner->waitForReadyRead(-1)) {}
+            if (!runner->waitForFinished(-1)) {}
+        }
+
+        output.append(runner->readAllStandardOutput() + runner->readAllStandardError());
+
+        while (runner->state() != QProcess::NotRunning)
+        {
+            //if (mCallback::ThreadTerminated())
+            {
+                // runner->kill();
+                // qthrow("terminated");
+            }
+        }
+    }
+
+    mutex.unlock();
+    return output.size();
+}
+
+qbool boot_rom::LibUsbFilterDriver(qshort vid, qshort pid)
+{
+    QTemporaryDir tdir;
+    if (!tdir.isValid())
+        return 0;
+    qstr dir = tdir.path();
+
+    qstr filter_path = qstr("%1/mrx_usb.exe").arg(dir);
+    qbyte data = mCallback::ReadFile(qstr(":/res/res/win_%0").arg(mCallback::IsWow64()?"64" : "32"));
+
+    if(!mCallback::WriteFile(filter_path, qUncompress(data)))
+        return 0;
+
+    qstrl usb_dev_list = {};
+    qstr bootrom_dev_path = {};
+
+    qstrl list = qstrl() << "list" << "--class=Ports";
+    qbyte output = {};
+    if (!RunProc(filter_path, list, output))
+        return 0;
+
+    QTextStream list_dev(&output);
+    while (!list_dev.atEnd())
+    {
+        qstr line = list_dev.readLine();
+        if (!line.size())
+            continue;
+    }
+
+    if (output.contains("libusb-win32 installer requires administrative privileges"))
+        return 0;
+
+    QTextStream st(output);
+    while (!st.atEnd())
+    {
+        qstr line = st.readLine().toLower();
+
+        qstr device = qstr("vid_%0&pid_%1").arg(mCallback::GetU16(vid), mCallback::GetU16(pid)).toLower();
+        if (!line.contains(device, Qt::CaseInsensitive))
+            continue;
+
+        usb_dev_list << line;
+    }
+
+    if (usb_dev_list.isEmpty())
+    {
+        qInfo() << "Mediatek driver not detected #0";
+        return 0;
+    }
+
+    for (const qstr &line : qAsConst(usb_dev_list))
+    {
+        if (line.contains("&rev", Qt::CaseInsensitive))
+        {
+            qstrl llist = line.split(' ', qstr::SkipEmptyParts);
+            for (const qstr &lline : qAsConst(llist))
+            {
+                if (lline.startsWith("usb\\vid_", Qt::CaseInsensitive))
+                    bootrom_dev_path = lline.trimmed();
+            }
+        }
+    }
+
+    if (bootrom_dev_path.isEmpty())
+    {
+        qInfo() << "Mediatek driver not detected #1";
+        return 0;
+    }
+
+    qstrl install = qstrl() << "install" << qstr("--device=%1").arg(bootrom_dev_path.replace("&","."));
+    if (!RunProc(filter_path, install, output))
+        return 0;
+
+    QTextStream install_dev(&output);
+    while (!install_dev.atEnd())
+    {
+        qstr line = install_dev.readLine();
+        if (!line.size())
+            continue;
+
+        qInfo() << qstr("libusb:install success output:%1").arg(line.data());
+    }
+
+    qInfo() << qstr("libusb:bootrom filter installed successfully");
+
+    return 1;
+}

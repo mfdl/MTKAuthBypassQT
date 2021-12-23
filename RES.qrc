@@ -1,6 +1,5 @@
 <RCC>
     <qresource prefix="/new/prefix1">
-        <file>mtksecbypass.ico</file>
         <file>fontawesome-webfont.ttf</file>
     </qresource>
     <qresource prefix="/res">
@@ -32,56 +31,9 @@
         <file>res/mt8163_payload.bin</file>
         <file>res/mt8173_payload.bin</file>
         <file>res/mt8695_payload.bin</file>
-        <file>res/usb_filter.exe</file>
         <file>res/win_32</file>
         <file>res/win_64</file>
         <file>res/mt6781_payload.bin</file>
     </qresource>
-    <qresource prefix="/new_exploit">
-        <file>res/new_exploit/da_x.bin</file>
-        <file>res/new_exploit/generic_dump_payload.bin</file>
-        <file>res/new_exploit/generic_loader_payload.bin</file>
-        <file>res/new_exploit/generic_patcher_payload.bin</file>
-        <file>res/new_exploit/generic_preloader_dump_payload.bin</file>
-        <file>res/new_exploit/generic_reboot_payload.bin</file>
-        <file>res/new_exploit/generic_stage1_payload.bin</file>
-        <file>res/new_exploit/generic_uart_dump_payload.bin</file>
-        <file>res/new_exploit/mt2601_payload.bin</file>
-        <file>res/new_exploit/mt6261_payload.bin</file>
-        <file>res/new_exploit/mt6572_payload.bin</file>
-        <file>res/new_exploit/mt6580_payload.bin</file>
-        <file>res/new_exploit/mt6582_payload.bin</file>
-        <file>res/new_exploit/mt6592_payload.bin</file>
-        <file>res/new_exploit/mt6595_payload.bin</file>
-        <file>res/new_exploit/mt6735_payload.bin</file>
-        <file>res/new_exploit/mt6737_payload.bin</file>
-        <file>res/new_exploit/mt6739_payload.bin</file>
-        <file>res/new_exploit/mt6753_payload.bin</file>
-        <file>res/new_exploit/mt6755_payload.bin</file>
-        <file>res/new_exploit/mt6757_payload.bin</file>
-        <file>res/new_exploit/mt6761_payload.bin</file>
-        <file>res/new_exploit/mt6763_payload.bin</file>
-        <file>res/new_exploit/mt6765_payload.bin</file>
-        <file>res/new_exploit/mt6768_payload.bin</file>
-        <file>res/new_exploit/mt6771_payload.bin</file>
-        <file>res/new_exploit/mt6779_payload.bin</file>
-        <file>res/new_exploit/mt6785_payload.bin</file>
-        <file>res/new_exploit/mt6795_payload.bin</file>
-        <file>res/new_exploit/mt6797_payload.bin</file>
-        <file>res/new_exploit/mt6799_payload.bin</file>
-        <file>res/new_exploit/mt6833_payload.bin</file>
-        <file>res/new_exploit/mt6853_payload.bin</file>
-        <file>res/new_exploit/mt6873_payload.bin</file>
-        <file>res/new_exploit/mt6877_payload.bin</file>
-        <file>res/new_exploit/mt6885_payload.bin</file>
-        <file>res/new_exploit/mt6893_payload.bin</file>
-        <file>res/new_exploit/mt8127_payload.bin</file>
-        <file>res/new_exploit/mt8163_payload.bin</file>
-        <file>res/new_exploit/mt8167_payload.bin</file>
-        <file>res/new_exploit/mt8173_payload.bin</file>
-        <file>res/new_exploit/mt8590_payload.bin</file>
-        <file>res/new_exploit/mt8695_payload.bin</file>
-        <file>res/new_exploit/pl.bin</file>
-        <file>res/new_exploit/stage2.bin</file>
-    </qresource>
+    <qresource prefix="/new_exploit"/>
 </RCC>
