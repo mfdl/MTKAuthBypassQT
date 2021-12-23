@@ -59,7 +59,6 @@ HEADERS += \
     brom/m_defs.h \
     brom/meta_cmd.h \
     brom/usb_defs.h \
-    comport/qsp.h \
     comport/usbdevfinder.h \
     gui/app.h \
     gui/appinit.h \
@@ -87,7 +86,6 @@ SOURCES += \
     brom/meta_mode.cpp \
     brom/vivo_demo.cpp \
     brom/bootrom_old.cpp \
-    comport/qsp.cpp \
     comport/usbdevfinder.cpp \
     gui/app.cpp \
     gui/appinit.cpp \
