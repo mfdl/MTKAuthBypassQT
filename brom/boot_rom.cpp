@@ -1087,7 +1087,7 @@ bool boot_rom::brom_set_sec_cfg(quint16 hw_code, bool secure, bool dump_pl)
 
         send_log_normal("Disabling watchdog..\n");
 
-        if (!BRom_WriteCmd32(config.wdg_addr, config.uart_base))
+        if (!BRom_WriteCmd32(config.wdg_addr, 0x22000064))
         {
             send_log_red("disable WDT error!");
             return 0;
